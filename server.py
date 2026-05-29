@@ -601,5 +601,7 @@ def static_files(filename):
 
 
 if __name__ == '__main__':
-    print('Server running -> open http://localhost:5000 in your browser')
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    # Retrieve port from environment variables (e.g. Railway) or fallback to 5000
+    port = int(os.environ.get('PORT', 5000))
+    print(f'Server running -> open http://localhost:{port} in your browser')
+    app.run(host='0.0.0.0', port=port, debug=True)
