@@ -1,0 +1,1853 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>AirQuali — IoT Air Quality Monitor</title>
+  <meta name="description"
+    content="Real-time IoT dashboard with ML predictions, AQI gauge, anomaly detection and Telegram alerts.">
+
+  <!-- PWA -->
+  <meta name="theme-color" content="#6366f1">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="AirQuali">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icon.svg">
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+
+  <style>
+    /* ── Design Tokens ──────────────────────────────────────────────── */
+    :root {
+      --bg-deep: #060b14;
+      --bg-base: #0a0f1a;
+      --bg-surface: rgba(255, 255, 255, 0.04);
+      --bg-surface-hv: rgba(255, 255, 255, 0.07);
+      --border: rgba(255, 255, 255, 0.08);
+      --border-hv: rgba(255, 255, 255, 0.16);
+      --text-primary: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --text-muted: #475569;
+      --indigo: #6366f1;
+      --indigo-glow: rgba(99, 102, 241, 0.3);
+      --orange: #f97316;
+      --sky: #38bdf8;
+      --violet: #a78bfa;
+      --green: #22c55e;
+      --red: #ef4444;
+      --amber: #f59e0b;
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --blur: blur(20px);
+      --shadow-glass: 0 4px 24px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* ── Reset ──────────────────────────────────────────────────────── */
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 50% at 20% 20%, rgba(99, 102, 241, 0.12) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 40% at 80% 70%, rgba(56, 189, 248, 0.08) 0%, transparent 55%),
+        radial-gradient(ellipse 50% 60% at 50% 100%, rgba(167, 139, 250, 0.07) 0%, transparent 50%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Layout ─────────────────────────────────────────────────────── */
+    .app {
+      position: relative;
+      z-index: 1;
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 24px 20px 56px;
+    }
+
+    /* ── Glass ───────────────────────────────────────────────────────── */
+    .glass {
+      background: var(--bg-surface);
+      backdrop-filter: var(--blur);
+      -webkit-backdrop-filter: var(--blur);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-glass);
+      transition: var(--transition);
+    }
+
+    .glass:hover {
+      border-color: var(--border-hv);
+      background: var(--bg-surface-hv);
+    }
+
+    /* ── Sticky Header ───────────────────────────────────────────────── */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 14px 20px;
+      margin-bottom: 24px;
+      background: rgba(6, 11, 20, 0.85);
+      backdrop-filter: var(--blur);
+      -webkit-backdrop-filter: var(--blur);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-ring {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      background: linear-gradient(135deg, var(--indigo), var(--sky));
+      box-shadow: 0 0 16px var(--indigo-glow);
+      animation: ring-pulse 3s ease-in-out infinite;
+    }
+
+    @keyframes ring-pulse {
+
+      0%,
+      100% {
+        box-shadow: 0 0 16px var(--indigo-glow);
+      }
+
+      50% {
+        box-shadow: 0 0 28px rgba(99, 102, 241, 0.55);
+      }
+    }
+
+    .header-title h1 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+
+    .header-title p {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    /* Device selector */
+    .device-select {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      border-radius: var(--radius-sm);
+      padding: 6px 10px;
+      font-size: 12px;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      outline: none;
+    }
+
+    .device-select:focus {
+      border-color: var(--indigo);
+    }
+
+    /* Status pill */
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      border-radius: 100px;
+      font-size: 11px;
+      font-weight: 500;
+      border: 1px solid var(--border);
+      background: var(--bg-surface);
+      transition: var(--transition);
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--text-muted);
+    }
+
+    .status-pill.online .status-dot {
+      background: var(--green);
+      animation: blink 2s infinite;
+    }
+
+    .status-pill.online {
+      border-color: rgba(34, 197, 94, 0.3);
+    }
+
+    @keyframes blink {
+
+      0%,
+      100% {
+        opacity: 1
+      }
+
+      50% {
+        opacity: 0.4
+      }
+    }
+
+    /* Header buttons */
+    .hdr-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: var(--radius-sm);
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: var(--transition);
+      white-space: nowrap;
+    }
+
+    .hdr-btn:hover {
+      background: var(--bg-surface-hv);
+      color: var(--text-primary);
+      border-color: var(--border-hv);
+    }
+
+    /* Mute button */
+    #btn-mute {
+      font-size: 15px;
+      padding: 7px 10px;
+    }
+
+    #btn-mute.muted {
+      opacity: 0.5;
+    }
+
+    /* Share button */
+    #btn-share {
+      border-color: rgba(99, 102, 241, 0.3);
+    }
+
+    #btn-share:hover {
+      border-color: var(--indigo);
+      color: var(--indigo);
+    }
+
+    /* Public URL display */
+    #url-display {
+      font-size: 10px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      display: none;
+    }
+
+    #url-display.visible {
+      display: block;
+    }
+
+    /* Install button */
+    #btn-install {
+      display: none;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 16px;
+      border-radius: 100px;
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      border: none;
+      color: #fff;
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 2px 14px rgba(34, 197, 94, 0.35);
+      animation: install-pulse 2.5s ease-in-out infinite;
+      transition: var(--transition);
+    }
+
+    #btn-install.visible {
+      display: flex;
+    }
+
+    #btn-install:hover {
+      transform: translateY(-2px);
+      animation: none;
+    }
+
+    @keyframes install-pulse {
+
+      0%,
+      100% {
+        box-shadow: 0 2px 14px rgba(34, 197, 94, 0.35);
+      }
+
+      50% {
+        box-shadow: 0 2px 24px rgba(34, 197, 94, 0.6);
+      }
+    }
+
+    /* ── Gas Alert Banner ────────────────────────────────────────────── */
+    #gas-alert-banner {
+      display: none;
+      align-items: center;
+      gap: 16px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      border-radius: var(--radius-md);
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      animation: banner-pulse 1.5s ease-in-out infinite;
+    }
+
+    #gas-alert-banner.active {
+      display: flex;
+    }
+
+    @keyframes banner-pulse {
+
+      0%,
+      100% {
+        border-color: rgba(239, 68, 68, 0.35);
+      }
+
+      50% {
+        border-color: rgba(239, 68, 68, 0.65);
+      }
+    }
+
+    .alert-icon {
+      font-size: 24px;
+    }
+
+    .alert-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--red);
+    }
+
+    .alert-sub {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+
+    /* ── AQI HERO ─────────────────────────────────────────────────────── */
+    .hero-section {
+      display: grid;
+      grid-template-columns: minmax(260px, 1fr) minmax(260px, 2fr);
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .aqi-hero {
+      padding: 28px 20px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+    }
+
+    .aqi-hero-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1.2px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .gauge-wrap {
+      width: 100%;
+      max-width: 240px;
+    }
+
+    .gauge-svg {
+      width: 100%;
+      display: block;
+      overflow: visible;
+    }
+
+    #gauge-arc {
+      transition: stroke-dashoffset 0.9s cubic-bezier(0.4, 0, 0.2, 1),
+        stroke 0.5s ease;
+    }
+
+    .aqi-number {
+      font-size: 3rem;
+      font-weight: 800;
+      letter-spacing: -2px;
+      line-height: 1;
+      text-align: center;
+      margin-top: -4px;
+      transition: color 0.5s ease;
+    }
+
+    .aqi-category-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 14px;
+      border-radius: 100px;
+      margin-top: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid currentColor;
+      transition: color 0.5s ease, border-color 0.5s ease;
+    }
+
+    .aqi-zone-dots {
+      display: flex;
+      gap: 6px;
+      margin-top: 14px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .zone-dot {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 8px;
+      font-weight: 700;
+      color: rgba(0, 0, 0, 0.75);
+      cursor: default;
+    }
+
+    /* ── Metric Cards Grid ───────────────────────────────────────────── */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 14px;
+      align-content: start;
+    }
+
+    .metric-card {
+      padding: 20px 20px 18px;
+      position: relative;
+      overflow: hidden;
+      border-radius: var(--radius-md);
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      backdrop-filter: var(--blur);
+      -webkit-backdrop-filter: var(--blur);
+      box-shadow: var(--shadow-glass);
+      transition: var(--transition), border-color 0.5s ease, box-shadow 0.5s ease;
+    }
+
+    .metric-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--border-hv);
+    }
+
+    .metric-card[data-severity="warning"] {
+      border-color: rgba(245, 158, 11, 0.5);
+      box-shadow: var(--shadow-glass), 0 0 20px rgba(245, 158, 11, 0.1);
+    }
+
+    .metric-card[data-severity="danger"] {
+      border-color: rgba(239, 68, 68, 0.5);
+      box-shadow: var(--shadow-glass), 0 0 20px rgba(239, 68, 68, 0.15);
+    }
+
+    .metric-glow {
+      position: absolute;
+      top: -30px;
+      right: -30px;
+      width: 90px;
+      height: 90px;
+      border-radius: 50%;
+      opacity: 0.12;
+      pointer-events: none;
+    }
+
+    .temp .metric-glow {
+      background: var(--orange);
+    }
+
+    .hum .metric-glow {
+      background: var(--sky);
+    }
+
+    .aq .metric-glow {
+      background: var(--violet);
+    }
+
+    .gas .metric-glow {
+      background: var(--green);
+    }
+
+    .metric-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 10px;
+    }
+
+    .metric-icon {
+      margin-right: 4px;
+    }
+
+    .metric-value {
+      font-size: 2.6rem;
+      font-weight: 800;
+      letter-spacing: -1.5px;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .metric-unit {
+      font-size: 1.2rem;
+      font-weight: 400;
+      color: var(--text-secondary);
+      margin-left: 3px;
+    }
+
+    .gas-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .badge-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--green);
+    }
+
+    .gas-badge.warn .badge-dot {
+      background: var(--red);
+      animation: blink 1s infinite;
+    }
+
+    #gas-text {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    /* ── Charts ──────────────────────────────────────────────────────── */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .chart-card {
+      padding: 20px;
+      border-radius: var(--radius-md);
+    }
+
+    .chart-card.full-width {
+      grid-column: 1 / -1;
+    }
+
+    .chart-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .chart-title {
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .chart-subtitle {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .prediction-legend {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    .pred-line {
+      display: inline-block;
+      width: 20px;
+      height: 2px;
+      background: currentColor;
+      border-radius: 1px;
+      border-top: 2px dashed currentColor;
+    }
+
+    /* ── ML Predictions Panel ────────────────────────────────────────── */
+    #predictions-panel {
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .panel-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .panel-title h2 {
+      font-size: 1.1rem;
+      font-weight: 700;
+    }
+
+    .ml-badge {
+      padding: 3px 9px;
+      border-radius: 100px;
+      font-size: 10px;
+      font-weight: 600;
+      background: rgba(99, 102, 241, 0.15);
+      color: var(--indigo);
+      border: 1px solid rgba(99, 102, 241, 0.25);
+    }
+
+    .model-status-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-left: auto;
+    }
+
+    .status-chip {
+      padding: 5px 12px;
+      border-radius: 100px;
+      font-size: 11px;
+      font-weight: 500;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+
+    .status-chip .chip-val {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    .r2-good {
+      color: var(--green) !important;
+    }
+
+    .r2-ok {
+      color: var(--amber) !important;
+    }
+
+    .r2-poor {
+      color: var(--red) !important;
+    }
+
+    .pred-grid {
+      display: grid;
+      grid-template-columns: 90px repeat(5, 1fr);
+      gap: 6px;
+    }
+
+    .pred-cell {
+      padding: 10px 6px;
+      border-radius: var(--radius-sm);
+      text-align: center;
+      font-size: 12px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+    }
+
+    .pred-cell.header {
+      color: var(--text-muted);
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .pred-cell.label {
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-align: left;
+      padding-left: 10px;
+    }
+
+    .pred-cell.value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--text-primary);
+    }
+
+    /* ── Alert Log Panel ─────────────────────────────────────────────── */
+    .alert-log-panel {
+      padding: 0;
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+
+    .alert-panel-hdr {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 16px 20px;
+      cursor: pointer;
+      user-select: none;
+      transition: var(--transition);
+    }
+
+    .alert-panel-hdr:hover {
+      background: var(--bg-surface-hv);
+    }
+
+    .alert-panel-hdr h3 {
+      font-size: 13px;
+      font-weight: 600;
+      flex: 1;
+    }
+
+    .alert-count-badge {
+      padding: 2px 8px;
+      border-radius: 100px;
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--red);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      font-size: 11px;
+      font-weight: 600;
+      display: none;
+    }
+
+    .alert-count-badge.visible {
+      display: inline-block;
+    }
+
+    .chevron {
+      font-size: 12px;
+      color: var(--text-muted);
+      transition: transform 0.3s;
+    }
+
+    .chevron.open {
+      transform: rotate(180deg);
+    }
+
+    .alert-panel-body {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.35s ease;
+    }
+
+    .alert-panel-body.open {
+      max-height: 600px;
+    }
+
+    .alert-items {
+      padding: 0 20px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .alert-item {
+      padding: 12px 14px;
+      border-radius: var(--radius-sm);
+      background: rgba(255, 255, 255, 0.03);
+      border-left: 3px solid;
+    }
+
+    .alert-item-hdr {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+
+    .alert-sev {
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .alert-ts {
+      font-size: 10px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+      margin-left: auto;
+    }
+
+    .alert-msg {
+      font-size: 12px;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .alert-vals {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    .no-alerts {
+      padding: 20px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    /* ── Footer ──────────────────────────────────────────────────────── */
+    footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      padding: 14px 20px;
+      border-radius: var(--radius-md);
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      backdrop-filter: var(--blur);
+      margin-top: 8px;
+    }
+
+    footer p {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    footer span {
+      color: var(--text-secondary);
+    }
+
+    .footer-btns {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    /* ── PWA overlays ────────────────────────────────────────────────── */
+    #ios-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9998;
+      background: rgba(0, 0, 0, 0.5);
+    }
+
+    #ios-overlay.open {
+      display: block;
+    }
+
+    #ios-install-sheet {
+      display: none;
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 9999;
+      padding: 0 16px 32px;
+      background: rgba(10, 15, 26, 0.97);
+      border-top: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 20px 20px 0 0;
+      backdrop-filter: blur(20px);
+      transform: translateY(100%);
+      transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    #ios-install-sheet.open {
+      display: block;
+      transform: translateY(0);
+    }
+
+    .ios-handle {
+      width: 40px;
+      height: 4px;
+      border-radius: 2px;
+      background: rgba(255, 255, 255, 0.2);
+      margin: 12px auto 20px;
+    }
+
+    .ios-title {
+      font-size: 17px;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 6px;
+    }
+
+    .ios-sub {
+      font-size: 13px;
+      color: var(--text-secondary);
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .ios-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .ios-step {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .ios-snum {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: var(--indigo);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .ios-stext {
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .ios-stext strong {
+      color: var(--sky);
+    }
+
+    #ios-close {
+      width: 100%;
+      padding: 13px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--text-secondary);
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    #install-success {
+      display: none;
+      position: fixed;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-80px);
+      z-index: 99999;
+      padding: 13px 22px;
+      border-radius: 100px;
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      box-shadow: 0 8px 32px rgba(34, 197, 94, 0.4);
+      transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.4s ease;
+      white-space: nowrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #install-success.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    /* ── Responsive ──────────────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      .hero-section {
+        grid-template-columns: 1fr;
+      }
+
+      .cards {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .charts-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .chart-card.full-width {
+        grid-column: 1;
+      }
+
+      .pred-grid {
+        grid-template-columns: 72px repeat(5, 1fr);
+        gap: 4px;
+      }
+
+      .pred-cell {
+        font-size: 10px;
+        padding: 8px 4px;
+      }
+    }
+
+    @media (max-width: 500px) {
+      .app {
+        padding: 16px 12px 40px;
+      }
+
+      header {
+        padding: 12px 14px;
+      }
+
+      .metric-value {
+        font-size: 2rem;
+      }
+
+      .header-title h1 {
+        font-size: 0.95rem;
+      }
+
+      .cards {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+
+    <!-- ── Sticky Header ── -->
+    <header>
+      <div class="header-left">
+        <div class="logo-ring" aria-hidden="true"></div>
+        <div class="header-title">
+          <h1>AirQuali Monitor</h1>
+          <p id="last-update">Waiting for data…</p>
+        </div>
+      </div>
+      <div class="header-right">
+        <span id="url-display"></span>
+        <select id="device-select" class="device-select" onchange="onDeviceChange()" title="Select device"></select>
+        <div id="status-pill" class="status-pill offline">
+          <div class="status-dot"></div>
+          <span id="status-text">Offline</span>
+        </div>
+        <button id="btn-mute" class="hdr-btn" onclick="toggleMute()" title="Toggle voice alerts">🔊</button>
+        <button id="btn-share" class="hdr-btn" onclick="shareURL()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round">
+            <circle cx="18" cy="5" r="3" />
+            <circle cx="6" cy="12" r="3" />
+            <circle cx="18" cy="19" r="3" />
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+          </svg>
+          Share
+        </button>
+        <button id="btn-install" onclick="triggerInstall()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          Install App
+        </button>
+        <button id="btn-export" class="hdr-btn" onclick="exportCSV()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+          </svg>
+          Export Log
+        </button>
+        <button id="btn-download" class="hdr-btn" onclick="downloadCSV()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          Download CSV
+        </button>
+      </div>
+    </header>
+
+    <!-- ── Gas Alert Banner ── -->
+    <div id="gas-alert-banner" role="alert">
+      <span class="alert-icon">⚠️</span>
+      <div>
+        <div class="alert-title">Gas / Smoke Detected!</div>
+        <div class="alert-sub">Air quality has dropped below safe levels — please ventilate immediately.</div>
+      </div>
+    </div>
+
+    <!-- ── Hero: AQI Gauge + Metric Cards ── -->
+    <div class="hero-section">
+      <!-- AQI Gauge -->
+      <div class="aqi-hero glass">
+        <div class="aqi-hero-label">Air Quality Index</div>
+        <div class="gauge-wrap">
+          <svg class="gauge-svg" viewBox="0 0 220 130" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <filter id="glow-filter">
+                <feGaussianBlur stdDeviation="4" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+            <!-- Background track -->
+            <path d="M 20 110 A 90 90 0 0 1 200 110" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="20"
+              stroke-linecap="round" />
+            <!-- Active colored arc -->
+            <path id="gauge-arc" d="M 20 110 A 90 90 0 0 1 200 110" fill="none" stroke="#00e400" stroke-width="18"
+              stroke-linecap="round" stroke-dasharray="282.74 282.74" stroke-dashoffset="282.74"
+              filter="url(#glow-filter)" />
+            <!-- Scale labels -->
+            <text x="20" y="126" text-anchor="middle" font-family="Inter,sans-serif" font-size="9"
+              fill="#475569">0</text>
+            <text x="110" y="126" text-anchor="middle" font-family="Inter,sans-serif" font-size="9"
+              fill="#475569">250</text>
+            <text x="200" y="126" text-anchor="middle" font-family="Inter,sans-serif" font-size="9"
+              fill="#475569">500</text>
+          </svg>
+        </div>
+        <div class="aqi-number" id="aqi-number" style="color:#00e400">--</div>
+        <div class="aqi-category-badge" id="aqi-cat-badge" style="color:#00e400">Waiting…</div>
+        <div class="aqi-zone-dots">
+          <span class="zone-dot" style="background:#00e400" title="Good (0–50)">G</span>
+          <span class="zone-dot" style="background:#ffff00" title="Moderate (51–100)">M</span>
+          <span class="zone-dot" style="background:#ff7e00" title="Unhealthy for Sensitive (101–150)">S</span>
+          <span class="zone-dot" style="background:#ff0000" title="Unhealthy (151–200)">U</span>
+          <span class="zone-dot" style="background:#8f3f97;color:#fff" title="Very Unhealthy (201–300)">V</span>
+          <span class="zone-dot" style="background:#7e0023;color:#fff" title="Hazardous (301–500)">H</span>
+        </div>
+      </div>
+
+      <!-- Metric Cards -->
+      <div class="cards">
+        <div class="metric-card temp" id="card-temp" data-severity="normal">
+          <div class="metric-glow"></div>
+          <div class="metric-label"><span class="metric-icon">🌡️</span>Temperature</div>
+          <div><span class="metric-value" id="val-temp" style="color:var(--orange)">--</span><span
+              class="metric-unit">°C</span></div>
+        </div>
+        <div class="metric-card hum" id="card-hum" data-severity="normal">
+          <div class="metric-glow"></div>
+          <div class="metric-label"><span class="metric-icon">💧</span>Humidity</div>
+          <div><span class="metric-value" id="val-hum" style="color:var(--sky)">--</span><span
+              class="metric-unit">%</span></div>
+        </div>
+        <div class="metric-card aq" id="card-aq" data-severity="normal">
+          <div class="metric-glow"></div>
+          <div class="metric-label"><span class="metric-icon">🫧</span>Air Quality (ADC)</div>
+          <div><span class="metric-value" id="val-aq" style="color:var(--violet)">--</span></div>
+        </div>
+        <div class="metric-card gas" id="card-gas" data-severity="normal">
+          <div class="metric-glow"></div>
+          <div class="metric-label"><span class="metric-icon">🛡️</span>Gas Status</div>
+          <div id="gas-badge" class="gas-badge">
+            <div class="badge-dot"></div><span id="gas-text">Waiting…</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Charts ── -->
+    <div class="charts-grid">
+      <div class="chart-card glass">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">🌡️ Temperature History</div>
+            <div class="chart-subtitle">Live + ML forecast · <span style="color:var(--red);font-size:9px">●
+                anomaly</span></div>
+          </div>
+          <div class="prediction-legend" style="color:var(--orange)"><span class="pred-line"></span> ML Forecast</div>
+        </div>
+        <canvas id="chart-temp" height="180"></canvas>
+      </div>
+      <div class="chart-card glass">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">💧 Humidity History</div>
+            <div class="chart-subtitle">Live + ML forecast · <span style="color:var(--red);font-size:9px">●
+                anomaly</span></div>
+          </div>
+          <div class="prediction-legend" style="color:var(--sky)"><span class="pred-line"></span> ML Forecast</div>
+        </div>
+        <canvas id="chart-hum" height="180"></canvas>
+      </div>
+      <div class="chart-card glass full-width">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">🫧 Air Quality (Raw ADC) — Last 100 Readings</div>
+            <div class="chart-subtitle">Higher value = worse air quality · <span
+                style="color:var(--red);font-size:9px">● anomaly</span></div>
+          </div>
+          <div class="prediction-legend" style="color:var(--violet)"><span class="pred-line"></span> ML Forecast</div>
+        </div>
+        <canvas id="chart-aq" height="100"></canvas>
+      </div>
+    </div>
+
+    <!-- ── ML Predictions Panel ── -->
+    <div id="predictions-panel" class="glass">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span style="font-size:18px">🤖</span>
+          <h2>ML Predictions</h2>
+          <span class="ml-badge">scikit-learn</span>
+        </div>
+        <div class="model-status-row">
+          <div class="status-chip">📊 Training data: <span class="chip-val" id="chip-size">--</span></div>
+          <div class="status-chip">🕒 Last retrain: <span class="chip-val" id="chip-time">--</span></div>
+          <div class="status-chip">R² Temp: <span class="chip-val" id="chip-r2t">--</span></div>
+          <div class="status-chip">R² Hum: <span class="chip-val" id="chip-r2h">--</span></div>
+          <div class="status-chip">R² AQ: <span class="chip-val" id="chip-r2a">--</span></div>
+        </div>
+      </div>
+      <div class="pred-grid" id="pred-grid">
+        <div class="pred-cell header">Metric</div>
+        <div class="pred-cell header">+1</div>
+        <div class="pred-cell header">+2</div>
+        <div class="pred-cell header">+3</div>
+        <div class="pred-cell header">+4</div>
+        <div class="pred-cell header">+5</div>
+        <div class="pred-cell label">🌡️ Temp °C</div>
+        <div class="pred-cell value" id="pt1">--</div>
+        <div class="pred-cell value" id="pt2">--</div>
+        <div class="pred-cell value" id="pt3">--</div>
+        <div class="pred-cell value" id="pt4">--</div>
+        <div class="pred-cell value" id="pt5">--</div>
+        <div class="pred-cell label">💧 Hum %</div>
+        <div class="pred-cell value" id="ph1">--</div>
+        <div class="pred-cell value" id="ph2">--</div>
+        <div class="pred-cell value" id="ph3">--</div>
+        <div class="pred-cell value" id="ph4">--</div>
+        <div class="pred-cell value" id="ph5">--</div>
+        <div class="pred-cell label">🫧 AQ ADC</div>
+        <div class="pred-cell value" id="pa1">--</div>
+        <div class="pred-cell value" id="pa2">--</div>
+        <div class="pred-cell value" id="pa3">--</div>
+        <div class="pred-cell value" id="pa4">--</div>
+        <div class="pred-cell value" id="pa5">--</div>
+      </div>
+    </div>
+
+    <!-- ── Alert Log Panel (collapsible) ── -->
+    <div class="alert-log-panel glass" style="margin-bottom:20px">
+      <div class="alert-panel-hdr" onclick="toggleAlertPanel()" id="alert-panel-hdr">
+        <span style="font-size:16px">🔔</span>
+        <h3>Alert Log</h3>
+        <span class="alert-count-badge" id="alert-badge">0</span>
+        <span class="chevron" id="alert-chevron">▼</span>
+      </div>
+      <div class="alert-panel-body" id="alert-panel-body">
+        <div class="alert-items" id="alert-items">
+          <div class="no-alerts">No alerts yet — system is nominal ✓</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Footer ── -->
+    <footer>
+      <p>AirQuali IoT Dashboard · <span id="reading-count">0</span> readings · <a id="analytics-link" href="/analytics"
+          style="color:var(--indigo);text-decoration:none">📊 Analytics</a></p>
+      <div class="footer-btns">
+        <button class="hdr-btn" onclick="generateReport()">📄 Generate Report</button>
+        <button class="hdr-btn" id="btn-latest-report" onclick="downloadLatestReport()" style="display:none">⬇ Latest
+          Report</button>
+      </div>
+    </footer>
+
+  </div><!-- /.app -->
+
+  <!-- iOS PWA install sheet -->
+  <div id="ios-overlay" onclick="closeIosSheet()"></div>
+  <div id="ios-install-sheet" role="dialog" aria-modal="true">
+    <div class="ios-handle"></div>
+    <div class="ios-title">📥 Install AirQuali</div>
+    <div class="ios-sub">Add to your Home Screen for the best offline experience.</div>
+    <div class="ios-steps">
+      <div class="ios-step">
+        <div class="ios-snum">1</div>
+        <div class="ios-stext">Tap the <strong>Share</strong> button <span style="font-size:16px">📤</span> at the
+          bottom of Safari</div>
+      </div>
+      <div class="ios-step">
+        <div class="ios-snum">2</div>
+        <div class="ios-stext">Scroll and tap <strong>Add to Home Screen</strong> ➕</div>
+      </div>
+      <div class="ios-step">
+        <div class="ios-snum">3</div>
+        <div class="ios-stext">Tap <strong>Add</strong> in the top-right ✅</div>
+      </div>
+    </div>
+    <button id="ios-close" onclick="closeIosSheet()">Got it — Dismiss</button>
+  </div>
+  <div id="install-success" role="status">✅ AirQuali installed!</div>
+
+  <script>
+    // ═══════════════════════════════════════════════════════════════════
+    // STATE
+    // ═══════════════════════════════════════════════════════════════════
+    let currentDevice = localStorage.getItem('aq_device') || 'esp32_main';
+    let voiceMuted = localStorage.getItem('aq_muted') === 'true';
+    let alertPanelOpen = false;
+    let _deferredPrompt = null;
+
+    // Voice state tracking
+    let _lastGas = 'Safe', _lastAQILevel = 0, _lastAnomaly = false;
+
+    // Gauge state
+    let _gaugeAQI = 0;
+    const ARC_LEN = 282.74;
+
+    // ═══════════════════════════════════════════════════════════════════
+    // CHART FACTORY
+    // ═══════════════════════════════════════════════════════════════════
+    const CHART_OPTS = (color, yMin, yMax) => ({
+      responsive: true, maintainAspectRatio: true,
+      animation: { duration: 300 },
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(10,15,26,0.92)',
+          titleColor: '#94a3b8', bodyColor: '#f1f5f9',
+          borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1,
+          padding: 10, cornerRadius: 8,
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#475569', font: { size: 10 }, maxTicksLimit: 12 }, grid: { color: 'rgba(255,255,255,0.04)' }, border: { display: false } },
+        y: {
+          ticks: { color: '#475569', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' }, border: { display: false },
+          min: yMin, max: yMax
+        }
+      }
+    });
+
+    function makeChart(id, color, yMin, yMax) {
+      return new Chart(document.getElementById(id), {
+        data: {
+          labels: [],
+          datasets: [
+            {
+              type: 'line', label: 'Sensor', data: [], borderColor: color, borderWidth: 2,
+              backgroundColor: color + '26', fill: true, tension: 0.4, pointRadius: 0,
+              pointHoverRadius: 4, pointBackgroundColor: []
+            },
+            {
+              type: 'line', label: 'ML Forecast', data: [], borderColor: color, borderWidth: 1.5,
+              borderDash: [5, 4], backgroundColor: 'transparent', fill: false,
+              tension: 0, pointRadius: 3, pointStyle: 'circle', pointBackgroundColor: color + '88'
+            }
+          ]
+        },
+        options: CHART_OPTS(color, yMin, yMax)
+      });
+    }
+
+    const tempChart = makeChart('chart-temp', '#f97316', 0, 50);
+    const humChart = makeChart('chart-hum', '#38bdf8', 0, 100);
+    const aqChart = makeChart('chart-aq', '#a78bfa', 0, 4096);
+
+    function updateChart(chart, labels, values, anomalies, pred) {
+      chart.data.labels = labels;
+      const n = values.length;
+      const ds0 = chart.data.datasets[0];
+      ds0.data = values;
+      // Anomaly point coloring
+      ds0.pointRadius = values.map((_, i) => anomalies[i] ? 5 : 0);
+      ds0.pointBackgroundColor = values.map((_, i) => anomalies[i] ? '#ef4444' : ds0.borderColor);
+
+      // Forecast dataset: pad live data with null then append predictions
+      const baseColor = chart.data.datasets[0].borderColor;
+      const forecastLabels = pred ? pred.map((_, i) => `+${i + 1}`) : [];
+      const forecastData = new Array(n).fill(null);
+      if (pred) pred.forEach(v => forecastData.push(v));
+
+      chart.data.labels = [...labels, ...forecastLabels];
+      chart.data.datasets[1].data = forecastData;
+      chart.update('none');
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // AQI GAUGE
+    // ═══════════════════════════════════════════════════════════════════
+    function updateGauge(aqi, category, color) {
+      const arc = document.getElementById('gauge-arc');
+      arc.setAttribute('stroke', color);
+      arc.setAttribute('stroke-dashoffset', ARC_LEN * (1 - Math.min(aqi, 500) / 500));
+
+      // Animated counter
+      const numEl = document.getElementById('aqi-number');
+      const from = _gaugeAQI, to = aqi, dur = 700, start = performance.now();
+      const step = ts => {
+        const p = Math.min((ts - start) / dur, 1);
+        const e = 1 - Math.pow(1 - p, 3);
+        numEl.textContent = Math.round(from + (to - from) * e);
+        if (p < 1) requestAnimationFrame(step);
+        else { numEl.textContent = to; _gaugeAQI = to; }
+      };
+      requestAnimationFrame(step);
+
+      numEl.style.color = color;
+      const badge = document.getElementById('aqi-cat-badge');
+      badge.textContent = category;
+      badge.style.color = color;
+      badge.style.borderColor = color;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // NUMBER COUNTER ANIMATION
+    // ═══════════════════════════════════════════════════════════════════
+    function animateNum(el, to, decimals = 1) {
+      const from = parseFloat(el.dataset.animVal || '0') || 0;
+      const toVal = parseFloat(to);
+      if (isNaN(toVal)) { el.textContent = '--'; return; }
+      const dur = 500, start = performance.now();
+      const run = ts => {
+        const p = Math.min((ts - start) / dur, 1);
+        const e = 1 - Math.pow(1 - p, 3);
+        el.textContent = (from + (toVal - from) * e).toFixed(decimals);
+        if (p < 1) requestAnimationFrame(run);
+        else { el.textContent = toVal.toFixed(decimals); el.dataset.animVal = toVal; }
+      };
+      requestAnimationFrame(run);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // CARD SEVERITY COLORS
+    // ═══════════════════════════════════════════════════════════════════
+    function updateCardSeverity(latest) {
+      const temp = parseFloat(latest.temperature);
+      const aqi = parseInt(latest.aqi || 0);
+      const gas = latest.gas_status;
+      const card = id => document.getElementById(id);
+
+      card('card-temp').dataset.severity = temp > 35 ? 'danger' : temp > 30 ? 'warning' : 'normal';
+      const hum = parseFloat(latest.humidity);
+      card('card-hum').dataset.severity = (hum < 30 || hum > 80) ? 'warning' : 'normal';
+      card('card-aq').dataset.severity = aqi > 200 ? 'danger' : aqi > 100 ? 'warning' : 'normal';
+      card('card-gas').dataset.severity = gas !== 'Safe' ? 'danger' : 'normal';
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // VOICE ALERTS (Web Speech API)
+    // ═══════════════════════════════════════════════════════════════════
+    const synth = window.speechSynthesis;
+    function speak(text) {
+      if (voiceMuted || !synth) return;
+      synth.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 0.9; u.volume = 1.0;
+      synth.speak(u);
+    }
+    function checkVoice(d) {
+      const gas = d.gas_status;
+      const aqi = d.aqi || 0;
+      const anom = d.anomaly;
+      if (gas !== 'Safe' && _lastGas === 'Safe') speak('Warning! Gas detected! Please ventilate immediately.');
+      _lastGas = gas;
+      if (aqi > 150 && _lastAQILevel <= 150) speak(`Air quality is unhealthy. AQI is ${aqi}.`);
+      _lastAQILevel = aqi;
+      if (anom && !_lastAnomaly) speak('Anomaly detected in sensor readings.');
+      _lastAnomaly = !!anom;
+    }
+    function toggleMute() {
+      voiceMuted = !voiceMuted;
+      localStorage.setItem('aq_muted', voiceMuted);
+      const btn = document.getElementById('btn-mute');
+      btn.textContent = voiceMuted ? '🔇' : '🔊';
+      btn.classList.toggle('muted', voiceMuted);
+      if (voiceMuted) synth.cancel();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // ALERT LOG PANEL
+    // ═══════════════════════════════════════════════════════════════════
+    function toggleAlertPanel() {
+      alertPanelOpen = !alertPanelOpen;
+      document.getElementById('alert-panel-body').classList.toggle('open', alertPanelOpen);
+      document.getElementById('alert-chevron').classList.toggle('open', alertPanelOpen);
+    }
+
+    function renderAlerts(alerts) {
+      const badge = document.getElementById('alert-badge');
+      const items = document.getElementById('alert-items');
+      if (!alerts.length) {
+        badge.classList.remove('visible');
+        items.innerHTML = '<div class="no-alerts">No alerts yet — system is nominal ✓</div>';
+        return;
+      }
+      badge.textContent = alerts.length;
+      badge.classList.add('visible');
+      const SEV_COLOR = { WARNING: '#f59e0b', DANGER: '#ef4444', CRITICAL: '#8b5cf6' };
+      items.innerHTML = [...alerts].reverse().map(a => {
+        const col = SEV_COLOR[a.severity] || '#94a3b8';
+        return `<div class="alert-item" style="border-left-color:${col}">
+      <div class="alert-item-hdr">
+        <span class="alert-sev" style="color:${col}">${a.severity}</span>
+        <span class="alert-ts">${a.date} ${a.timestamp}</span>
+      </div>
+      <div class="alert-msg">${a.message}</div>
+      <div class="alert-vals">T:${a.temperature}°C · H:${a.humidity}% · AQI:${a.aqi}(${a.aqi_category}) · Gas:${a.gas_status}</div>
+    </div>`;
+      }).join('');
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // DEVICE SELECTOR
+    // ═══════════════════════════════════════════════════════════════════
+    async function fetchDevices() {
+      try {
+        const devs = await fetch('/devices').then(r => r.json());
+        const sel = document.getElementById('device-select');
+        const all = new Set(devs.map(d => d.device_id));
+        all.add('esp32_main');
+        const prev = sel.value || currentDevice;
+        sel.innerHTML = '';
+        [...all].forEach(id => {
+          const o = document.createElement('option');
+          o.value = id; o.textContent = id;
+          sel.appendChild(o);
+        });
+        sel.value = currentDevice;
+      } catch (e) { }
+    }
+    function onDeviceChange() {
+      currentDevice = document.getElementById('device-select').value;
+      localStorage.setItem('aq_device', currentDevice);
+      refreshDashboard();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // SHARE + PUBLIC URL
+    // ═══════════════════════════════════════════════════════════════════
+    async function fetchPublicURL() {
+      try {
+        const data = await fetch('/public-url').then(r => r.json());
+        const url = data.url || '';
+        const el = document.getElementById('url-display');
+        if (url && !url.includes('localhost')) {
+          el.textContent = url;
+          el.classList.add('visible');
+        }
+      } catch (e) { }
+    }
+    async function shareURL() {
+      try {
+        const data = await fetch('/public-url').then(r => r.json());
+        const url = data.url || window.location.href;
+        await navigator.clipboard.writeText(url);
+        const btn = document.getElementById('btn-share');
+        btn.innerHTML = '✓ Copied!';
+        setTimeout(() => btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg> Share`, 2000);
+      } catch (e) {
+        prompt('Copy this dashboard URL:', window.location.href);
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // PREDICTIONS PANEL
+    // ═══════════════════════════════════════════════════════════════════
+    function r2Class(v) {
+      if (v === null || v === undefined) return '';
+      return v >= 0.85 ? 'r2-good' : v >= 0.5 ? 'r2-ok' : 'r2-poor';
+    }
+    function updatePredPanel(pred) {
+      ['size', 'time'].forEach(k => {
+        const el = document.getElementById(`chip-${k}`);
+        if (el) el.textContent = k === 'size' ? (pred.train_size ?? '--') : (pred.last_retrain ?? '--');
+      });
+      ['r2t', 'r2h', 'r2a'].forEach((k, i) => {
+        const el = document.getElementById(`chip-${k}`);
+        const key = ['r2_temp', 'r2_hum', 'r2_aq'][i];
+        const v = pred[key];
+        if (el) { el.textContent = v != null ? v.toFixed(3) : '--'; el.className = 'chip-val ' + r2Class(v); }
+      });
+      const T = pred.temperature || [], H = pred.humidity || [], A = pred.air_quality || [];
+      for (let i = 1; i <= 5; i++) {
+        const pt = document.getElementById(`pt${i}`); if (pt) pt.textContent = T[i - 1] ?? '--';
+        const ph = document.getElementById(`ph${i}`); if (ph) ph.textContent = H[i - 1] ?? '--';
+        const pa = document.getElementById(`pa${i}`); if (pa) pa.textContent = A[i - 1] != null ? Math.round(A[i - 1]) : '--';
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // REPORT BUTTONS
+    // ═══════════════════════════════════════════════════════════════════
+    async function generateReport() {
+      try {
+        const res = await fetch('/generate-report', { method: 'POST' });
+        const d = await res.json();
+        if (d.status === 'ok') {
+          const btn = document.getElementById('btn-latest-report');
+          btn.dataset.url = d.url;
+          btn.style.display = 'flex';
+          alert('Report generated: ' + d.filename);
+        } else {
+          alert(d.error || 'Failed to generate report');
+        }
+      } catch (e) { alert('Report generation failed. Is reportlab installed?'); }
+    }
+    function downloadLatestReport() {
+      const url = document.getElementById('btn-latest-report').dataset.url;
+      if (url) window.open(url, '_blank');
+    }
+    async function checkReports() {
+      try {
+        const reps = await fetch('/reports').then(r => r.json());
+        if (reps.length) {
+          const btn = document.getElementById('btn-latest-report');
+          btn.dataset.url = reps[0].url;
+          btn.style.display = 'flex';
+        }
+      } catch (e) { }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // MAIN DASHBOARD REFRESH
+    // ═══════════════════════════════════════════════════════════════════
+    const elPill = document.getElementById('status-pill');
+    const elStat = document.getElementById('status-text');
+
+    async function refreshDashboard() {
+      try {
+        const dev = currentDevice;
+        const [histRes, predRes, alertsRes] = await Promise.all([
+          fetch(`/history?device=${dev}`),
+          fetch(`/predict?device=${dev}`),
+          fetch('/alerts'),
+        ]);
+        const data = await histRes.json();
+        const pred = await predRes.json();
+        const alerts = await alertsRes.json();
+
+        if (!Array.isArray(data) || !data.length) return;
+
+        // Status
+        elPill.classList.remove('offline'); elPill.classList.add('online');
+        elStat.textContent = 'Live';
+        const latest = data[data.length - 1];
+        document.getElementById('last-update').textContent =
+          `Last: ${latest.timestamp || '--'}`;
+        document.getElementById('reading-count').textContent = data.length;
+
+        // AQI gauge
+        if (latest.aqi !== undefined) {
+          updateGauge(latest.aqi, latest.aqi_category || 'Good', latest.aqi_color || '#00e400');
+        }
+
+        // Metric cards
+        animateNum(document.getElementById('val-temp'), latest.temperature, 1);
+        animateNum(document.getElementById('val-hum'), latest.humidity, 1);
+        animateNum(document.getElementById('val-aq'), latest.air_quality, 0);
+
+        const isGas = latest.gas_status !== 'Safe';
+        document.getElementById('gas-text').textContent = latest.gas_status || '--';
+        const badge = document.getElementById('gas-badge');
+        badge.classList.toggle('warn', isGas);
+        document.getElementById('gas-alert-banner').classList.toggle('active', isGas);
+
+        // Card severity
+        updateCardSeverity(latest);
+
+        // Voice alerts
+        checkVoice(latest);
+
+        // Charts
+        const labels = data.map(d => d.timestamp || '');
+        const temps = data.map(d => parseFloat(d.temperature));
+        const hums = data.map(d => parseFloat(d.humidity));
+        const aqVals = data.map(d => parseInt(d.air_quality));
+        const anomaly = data.map(d => d.anomaly === true || d.anomaly === 'true');
+
+        updateChart(tempChart, labels, temps, anomaly, pred.temperature);
+        updateChart(humChart, labels, hums, anomaly, pred.humidity);
+        updateChart(aqChart, labels, aqVals, anomaly, pred.air_quality);
+
+        // Predictions panel
+        updatePredPanel(pred);
+
+        // Alert log
+        renderAlerts(alerts);
+
+      } catch (err) {
+        console.warn('Poll error:', err);
+        elPill.classList.add('offline'); elPill.classList.remove('online');
+        elStat.textContent = 'Offline';
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // CSV DOWNLOAD
+    // ═══════════════════════════════════════════════════════════════════
+    async function downloadCSV() {
+      try {
+        const data = await fetch(`/history?device=${currentDevice}`).then(r => r.json());
+        if (!Array.isArray(data) || !data.length) { alert('No data available yet.'); return; }
+        const headers = ['timestamp', 'temperature', 'humidity', 'air_quality', 'gas_status', 'aqi', 'aqi_category', 'anomaly'];
+        const rows = data.map(d => headers.map(h => JSON.stringify(d[h] ?? '')).join(','));
+        const csv = [headers.join(','), ...rows].join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const a = Object.assign(document.createElement('a'), {
+          href: URL.createObjectURL(blob),
+          download: `airquali_${currentDevice}_${new Date().toISOString().slice(0, 10)}.csv`
+        });
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      } catch (e) { alert('Failed to export CSV.'); }
+    }
+    function exportCSV() { window.location.href = '/export'; }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // PAGE TRANSITION
+    // ═══════════════════════════════════════════════════════════════════
+    document.getElementById('analytics-link').addEventListener('click', e => {
+      e.preventDefault();
+      document.body.style.cssText = 'opacity:0;transition:opacity 0.3s ease;';
+      setTimeout(() => window.location.href = '/analytics', 300);
+    });
+
+    // ═══════════════════════════════════════════════════════════════════
+    // PWA INSTALL
+    // ═══════════════════════════════════════════════════════════════════
+    const _isIos = /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+    const _isStandalone = () =>
+      window.matchMedia('(display-mode: standalone)').matches ||
+      window.navigator.standalone === true;
+
+    window.addEventListener('beforeinstallprompt', e => {
+      e.preventDefault(); _deferredPrompt = e;
+      document.getElementById('btn-install').classList.add('visible');
+    });
+    function triggerInstall() {
+      if (_deferredPrompt) {
+        _deferredPrompt.prompt();
+        _deferredPrompt.userChoice.then(c => {
+          if (c.outcome === 'accepted') { hideInstallBtn(); showInstallToast(); }
+          _deferredPrompt = null;
+        });
+      } else if (_isIos && !_isStandalone()) {
+        openIosSheet();
+      } else {
+        alert('To install: open browser menu → "Install app" or "Add to Home Screen".');
+      }
+    }
+    function hideInstallBtn() { document.getElementById('btn-install').classList.remove('visible'); }
+    function showInstallToast() {
+      const t = document.getElementById('install-success');
+      t.style.display = 'flex'; void t.offsetWidth; t.classList.add('show');
+      setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.style.display = 'none', 500); }, 4000);
+    }
+    function openIosSheet() {
+      document.getElementById('ios-overlay').classList.add('open');
+      requestAnimationFrame(() => document.getElementById('ios-install-sheet').classList.add('open'));
+      document.body.style.overflow = 'hidden';
+    }
+    function closeIosSheet() {
+      document.getElementById('ios-install-sheet').classList.remove('open');
+      document.getElementById('ios-overlay').classList.remove('open');
+      document.body.style.overflow = '';
+    }
+    window.addEventListener('appinstalled', () => { hideInstallBtn(); showInstallToast(); });
+    window.addEventListener('load', () => {
+      if (_isStandalone()) hideInstallBtn();
+      else if (_isIos) document.getElementById('btn-install').classList.add('visible');
+      document.getElementById('btn-mute').textContent = voiceMuted ? '🔇' : '🔊';
+      document.getElementById('btn-mute').classList.toggle('muted', voiceMuted);
+    });
+
+    // ═══════════════════════════════════════════════════════════════════
+    // SERVICE WORKER
+    // ═══════════════════════════════════════════════════════════════════
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' })
+          .then(reg => {
+            if (reg.waiting) reg.waiting.postMessage('SKIP_WAITING');
+            reg.addEventListener('updatefound', () => {
+              const sw = reg.installing;
+              if (sw) sw.addEventListener('statechange', () => {
+                if (sw.state === 'installed' && navigator.serviceWorker.controller)
+                  sw.postMessage('SKIP_WAITING');
+              });
+            });
+          })
+          .catch(e => console.warn('[PWA] SW failed:', e));
+      });
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // BOOT
+    // ═══════════════════════════════════════════════════════════════════
+    fetchDevices();
+    fetchPublicURL();
+    checkReports();
+    refreshDashboard();
+    setInterval(refreshDashboard, 2000);
+    setInterval(fetchDevices, 30000);
+  </script>
+</body>
+
+</html>

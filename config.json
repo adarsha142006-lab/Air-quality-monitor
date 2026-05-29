@@ -1,0 +1,19 @@
+{
+  "telegram": {
+    "enabled": false,
+    "bot_token": "",
+    "chat_id": ""
+  },
+  "alerts": {
+    "temperature_threshold": 35,
+    "aqi_threshold": 150,
+    "cooldown_seconds": 60
+  },
+  "security": {
+    "clear_key": "changeme123"
+  },
+  "ngrok": {
+    "enabled": false,
+    "auth_token": ""
+  }
+}

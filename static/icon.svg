@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a0f1a"/>
+      <stop offset="100%" style="stop-color:#1a1f3a"/>
+    </linearGradient>
+    <linearGradient id="arc" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#6366f1"/>
+      <stop offset="50%" style="stop-color:#38bdf8"/>
+      <stop offset="100%" style="stop-color:#a78bfa"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <!-- Background rounded rect -->
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+  <!-- Outer glow ring -->
+  <circle cx="256" cy="256" r="190" fill="none" stroke="rgba(99,102,241,0.15)" stroke-width="2"/>
+  <!-- Gauge background arc (semicircle) -->
+  <path d="M 100 300 A 160 160 0 0 1 412 300"
+        fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="28" stroke-linecap="round"/>
+  <!-- Gauge colored arc -->
+  <path d="M 100 300 A 160 160 0 0 1 412 300"
+        fill="none" stroke="url(#arc)" stroke-width="28" stroke-linecap="round"
+        filter="url(#glow)" stroke-dasharray="502 502" stroke-dashoffset="150"/>
+  <!-- Leaf / air quality icon in center -->
+  <text x="256" y="290" text-anchor="middle" font-size="120" font-family="serif">🌿</text>
+  <!-- AQ label -->
+  <text x="256" y="360" text-anchor="middle" font-size="44" font-weight="700"
+        font-family="Inter, system-ui, sans-serif" fill="#f1f5f9" letter-spacing="-1">AirQuali</text>
+  <!-- Decorative dots -->
+  <circle cx="100" cy="305" r="10" fill="#6366f1" opacity="0.8"/>
+  <circle cx="412" cy="305" r="10" fill="#a78bfa" opacity="0.8"/>
+</svg>
